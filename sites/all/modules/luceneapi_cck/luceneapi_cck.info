@@ -1,0 +1,17 @@
+; $Id: luceneapi_cck.info,v 1.2 2009/12/10 02:27:19 cpliakas Exp $
+name = "Search Lucene CCK"
+description = "Search Lucene CCK Indexes CCK data as separate Lucene fields and provides and option to expose them as bias fields."
+dependencies[] = search
+dependencies[] = luceneapi
+dependencies[] = luceneapi_node
+dependencies[] = content
+package = "Search Lucene API"
+core = 6.x
+php = 5.1.6
+
+; Information added by drupal.org packaging script on 2010-07-13
+version = "6.x-1.0-alpha4"
+core = "6.x"
+project = "luceneapi_cck"
+datestamp = "1279037707"
+

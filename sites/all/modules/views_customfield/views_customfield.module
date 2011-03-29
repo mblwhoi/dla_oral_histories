@@ -1,0 +1,23 @@
+<?php
+// $Id: views_customfield.module,v 1.3.2.3 2009/06/15 06:16:25 kratib Exp $
+
+
+/**
+ * Implementation hook_views_api
+ */
+function views_customfield_views_api() {
+  return array(
+    'api' => 2,
+  );
+}
+
+function views_customfield_views_pre_execute(&$view) {
+  $d = $view->display[$view->current_display];
+  $field_handlers = $d->handler->handlers['field'];
+  foreach ($field_handlers as $h) {
+    if (is_a($h, 'views_customfield_handler_field_phpcode')) {
+      $h->pre_execute();
+    }
+  }
+}
+

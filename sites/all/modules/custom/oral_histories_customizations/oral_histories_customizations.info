@@ -1,0 +1,6 @@
+; $Id: $
+
+name = Oral Histories Customizations Module
+description = Customizations for Oral Histories Site
+core = 6.x
+

@@ -1,0 +1,8 @@
+
+name = Oral Histories Theme
+description = Oral Histories Theme
+base theme = dla_theme
+core = 6.x
+engine = phptemplate
+
+stylesheets[all][] = css/oral-histories-theme-style.css

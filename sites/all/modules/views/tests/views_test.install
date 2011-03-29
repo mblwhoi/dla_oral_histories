@@ -1,0 +1,14 @@
+<?php
+// $Id: views_test.install,v 1.1.4.3 2010/05/24 09:13:03 dereine Exp $
+
+function views_test_install() {
+  drupal_install_schema('views_test');
+}
+
+function views_test_uninstall() {
+  drupal_uninstall_schema('views_test');
+}
+
+function views_test_schema() {
+  return variable_get('views_test_schema', array());
+}

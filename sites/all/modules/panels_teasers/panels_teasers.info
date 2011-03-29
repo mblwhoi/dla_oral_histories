@@ -1,0 +1,15 @@
+; $Id: panels_teasers.info,v 1.1.4.3 2010/06/15 23:38:47 gundalo Exp $
+name = Panels Teasers
+description = Allow panels to handle teaser layouts.
+package = "Panels"
+dependencies[] = panels
+dependencies[] = page_manager
+core = 6.x
+
+
+; Information added by drupal.org packaging script on 2010-06-15
+version = "6.x-2.0-beta2"
+core = "6.x"
+project = "panels_teasers"
+datestamp = "1276645514"
+

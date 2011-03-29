@@ -1,0 +1,214 @@
+<?php
+// $Id: luceneapi_cck.module,v 1.5 2010/02/18 02:22:44 cpliakas Exp $
+
+/**
+ * @defgroup luceneapi_cck Search Lucene CCK
+ * Search Lucene CCK Indexes CCK data as separate Lucene fields and provides and
+ * option to expose them as bias fields.
+ */
+
+/**
+ * @file
+ * Indexes CCK fields in separate Lucene fields.
+ *
+ * @ingroup luceneapi_cck
+ */
+
+/**
+ * Implementation of hook_menu().
+ */
+function luceneapi_cck_menu() {
+  $items = array();
+
+  $items['admin/settings/luceneapi_node/cck'] = array(
+    'title' => 'CCK fields',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('luceneapi_cck_admin_settings'),
+    'access arguments' => array('administer search'),
+    'type' => MENU_LOCAL_TASK,
+    'weight' => 7,
+    'file' => 'luceneapi_cck.admin.inc'
+  );
+
+  return $items;
+}
+
+/**
+ * Checks if a CCK field is indexed by at least one content type.
+ *
+ * @param $field_name
+ *   A string containing the machine readable name of the CCK field.
+ * @return
+ *   An array keyed by content type to display name for content types that are
+ *   indexing the CCK data.
+ */
+function luceneapi_cck_field_indexed($field_name) {
+  $types = array();
+  foreach (node_get_types('names') as $type => $name) {
+    if ($field = content_fields($field_name, $type)) {
+      if (!$field['display_settings'][NODE_BUILD_SEARCH_INDEX]['exclude']) {
+        $types[$type] = $name;
+      }
+    }
+  }
+  return $types;
+}
+
+/**
+ * Gets the enabled bias fields.
+ *
+ * @param $reset
+ *   A boolean flagging whether the static should be reset.
+ * @return
+ *   An associative array containing fields that are enabled as "bias" fields.
+ * @see luceneapi_cck_selected_fields_get()
+ */
+function luceneapi_cck_bias_fields_get($reset = FALSE) {
+  return luceneapi_cck_selected_fields_get('bias_fields', $reset);
+}
+
+/**
+ * Gets the enabled sortable fields.
+ *
+ * @param $reset
+ *   A boolean flagging whether the static should be reset.
+ * @return
+ *   An associative array containing fields that are enabled as "sortable"
+ *   fields.
+ * @see luceneapi_cck_selected_fields_get()
+ */
+function luceneapi_cck_sortable_fields_get($reset = FALSE) {
+  $fields = luceneapi_cck_selected_fields_get('sortable_fields', $reset);
+  if (!empty($fields)) {
+    $field_names = array_map('luceneapi_cck_sort_name', array_keys($fields));
+    return array_combine($field_names, $fields);
+  }
+  else {
+    return array();
+  }
+}
+
+/**
+ * Adds "_sort" to the value.  Useful as an array_map() callback.
+ */
+function luceneapi_cck_sort_name($field) {
+  return $field .'_sort';
+}
+
+/**
+ * Helper function for fields which a checkbox option.  Note that the fields
+ * must be indexed as well.
+ *
+ * @param $type
+ *   A string containing the option name.
+ * @param $reset
+ *   A boolean flagging whether the static should be reset.
+ */
+function luceneapi_cck_selected_fields_get($type, $reset = FALSE) {
+  static $selected_fields = array();
+  if (!isset($selected_fields[$type]) || $rebuild) {
+    $fields = array();
+    foreach (content_fields() as $field) {
+      if (variable_get("luceneapi_cck:{$field['field_name']}:field_type", 0)) {
+        $fields[$field['field_name']] = $field['widget']['label'];
+      }
+    }
+    $selected_fields[$type] = array_intersect_key(
+      $fields,
+      array_filter(variable_get("luceneapi_cck:$type", array()))
+    );
+  }
+  return $selected_fields[$type];
+}
+
+/**
+ * Implementation of hook_luceneapi_node_bias_fields().
+ */
+function luceneapi_cck_luceneapi_node_bias_fields() {
+  $fields = array();
+  foreach (luceneapi_cck_bias_fields_get() as $field => $label) {
+    $fields[$field] = array(
+      'title' => $label,
+      'default' => '0',
+      'description' => t(
+        'Content in the %field CCK field. This content is also indexed in the <em>Body text</em>.',
+        array('%field' => $label )
+      ),
+    );
+  }
+  return $fields;
+}
+
+/**
+ * Implementation of hook_luceneapi_node_sortable_fields().
+ */
+function luceneapi_cck_luceneapi_sortable_fields($module, $type = NULL) {
+  $fields = array();
+  if ('node' == $type) {
+    foreach (luceneapi_cck_sortable_fields_get() as $field => $label) {
+      $fields[$field] = array(
+        'title' => $label,
+        'type' => SORT_REGULAR,
+      );
+    }
+  }
+  return $fields;
+}
+
+/**
+ * Implementation of hook_theme().
+ */
+function luceneapi_cck_theme() {
+  return array(
+    'luceneapi_cck_admin_settings_form' => array(
+      'arguments' => array('form' => NULL),
+      'file' => 'luceneapi_cck.admin.inc'
+    ),
+  );
+}
+
+/**
+ * Implementation of hook_luceneapi_document_alter().
+ */
+function luceneapi_cck_luceneapi_document_alter($doc, $node, $module, $type = NULL) {
+  if ('node' != $type) {
+    return;
+  }
+
+  // Gets content fields.
+  static $fields, $sortable_fields;
+  if (NULL === $fields) {
+    $fields = content_fields();
+    $sortable_fields = luceneapi_cck_sortable_fields_get();
+  }
+
+  // Gets and indexes values.
+  $type = content_types($node->type);
+  foreach ($fields as $field) {
+    $variable = sprintf('luceneapi_cck:%s:field_type', $field['field_name']);
+    if (!$field_type = variable_get($variable, 0)) {
+      continue;
+    }
+
+    // Gets field value.
+    $value = '';
+    if (isset($type['fields'][$field['field_name']]) && isset($node->{$field['field_name']})) {
+      $values = array();
+      foreach ($node->{$field['field_name']} as $item) {
+        $values[] = content_format($type['fields'][$field['field_name']], $item, 'default', $node);
+      }
+      $value = trim(luceneapi_strip_tags(join(' ', $values)));
+    }
+
+    // Special case for sortable fields, adds a separate field to sort by.
+    // NOTE: Sort fields are lowercase so they are case insensitive.
+    $sort_name = luceneapi_cck_sort_name($field['field_name']);
+    if (isset($sortable_fields[$sort_name])) {
+      $sort_value = drupal_strtolower(truncate_utf8($value, 255, TRUE));
+      luceneapi_field_add($doc, 'keyword', $sort_name, $sort_value);
+    }
+
+    // Adds value to index.
+    luceneapi_field_add($doc, $field_type, $field['field_name'], $value);
+  }
+}

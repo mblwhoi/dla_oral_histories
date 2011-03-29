@@ -1,0 +1,247 @@
+<?php
+// $Id: panels_teasers.module,v 1.1.4.4 2010/06/15 23:38:47 gundalo Exp $
+
+/**
+ * @file panels_teasers.module
+ *
+ * This module allows you to handle Node Teaser layouts using Panels.
+ *
+ * Once enabled, visit Administer > Site Building > Teaser Panels
+ * [admin/build/teasers] to configure.
+ *
+ * To create different layouts for different content types, add a variant and
+ * add Node Type "Selection Rules".
+ *
+ */
+
+define('PANELS_TEASERS_REQUIRED_CTOOLS_API', '1.5');
+
+
+/**
+ * Implementation of hook_menu().
+ */
+function panels_teasers_menu() {
+
+  // Safety: go away if CTools is not at an appropriate version.
+  if (!module_invoke('ctools', 'api_version', PANELS_TEASERS_REQUIRED_CTOOLS_API)) {
+    return array();
+  }
+
+  $items['admin/build/teasers'] = array(
+    'title' => 'Teaser Panels',
+    'description' => 'Configure node teaser layout with Panels.',
+    'access arguments' => array('administer panel teasers'),
+    'page callback' => 'panels_teasers_edit',
+  );
+  return $items;
+}
+
+/**
+ * Implementation of hook_perm().
+ */
+function panels_teasers_perm() {
+  return array('administer panel teasers');
+}
+
+/** 
+ * Implementation of hook_enable()
+ * Clears all caches, making page_manager aware of node_teasers.inc
+ */
+function panels_teasers_enable(){
+ // module_invoke_all('flush_caches');
+  //Stolen from admin menu, this works...
+  
+
+  // Don't clear cache_form - in-progress form submissions may break.
+  // Ordered so clearing the page cache will always be the last action.
+  $core = array('cache', 'cache_block', 'cache_filter', 'cache_page');
+  $cache_tables = array_merge(module_invoke_all('flush_caches'), $core);
+  foreach ($cache_tables as $table) {
+    cache_clear_all('*', $table, TRUE);
+  }
+}
+
+/**
+ * Menu Callback for node_teasers 'task' editor.
+ *
+ * This just redirects to the Page Manager editor for this task.
+ *
+ */
+function panels_teasers_edit() {
+  drupal_goto('admin/build/pages/edit/node_teasers');
+}
+
+/**
+ * Preprocessor for node.tpl.php
+ */
+function panels_teasers_preprocess_node(&$vars){
+
+  // Bail out now if this isn't a teaser OR if this node is already being
+  // displayed as a panels_teaser.  This prevents infinite loops when you place
+  // "Node: Content" into your mini panel.
+  if (!$vars['teaser'] || $vars['page'] || $vars['node']->panels_teasers)
+  {
+    return;
+  }
+
+  // Load the node into a context.
+  ctools_include('context');
+  ctools_include('context-task-handler');
+
+  //Set a $node variable to prevent infinite looping
+  //Loads full node.  Preprocessor only loads a teaser node.
+  $node = node_load($vars['node']->nid);
+  $node->panels_teasers = $vars['node']->panels_teasers = TRUE;
+
+  //Get Task and bail if disabled.
+  $task = page_manager_get_task('node_teasers');
+  if ($task['disabled'] == TRUE){
+    return;
+  }
+
+  //Load available $contexts and $args for this Task
+  $contexts = ctools_context_handler_get_task_contexts($task, '', array($node));
+  $args = array($node->nid);
+
+  // Load the handlers, choosing only enabled handlers.
+  $handlers = page_manager_load_sorted_handlers($task, '', TRUE);
+
+  // Try each handler.
+  foreach ($handlers as $handler) {
+    //If $info exists, variant passed selection rules.  Break handler loop.
+    if ($info = panels_teasers_render($handler, $contexts, $args)){
+      break;
+    }
+  }
+
+  //If $info['content'], change $vars with panel content.
+  if ($info['content']){
+    $vars['content'] = $info['content'];
+
+    //Use special stripped down template if set
+    if ($info['template_replace']){
+      $vars['template_file'] = 'node-teaser-panel';
+      $vars['template_files'][] = 'node-teaser-panel';
+    }
+  }
+}
+
+/**
+ * Implementation of hook_theme_registry_alter().
+ *
+ * - Adds panels_teasers folder to template theme paths.
+ */
+function panels_teasers_theme_registry_alter(&$theme_registry) {
+  $modulepath = drupal_get_path('module', 'panels_teasers');
+  array_unshift($theme_registry['node']['theme paths'], $modulepath);
+}
+
+/**
+ * Implementation of hook_form_alter().
+ */
+function panels_teasers_form_alter(&$form, &$form_state, $form_id) {
+
+  //Remove the Node Teaser from Page Manager Admin
+  if ($form_id == "page_manager_list_pages_form"){
+    unset($form_state['pages']['rows']['node_teasers']);
+    return;
+  }
+
+  //All other form_altering is done on the node_teasers task.  Return if not.
+  if ($form_state['page']->task_name != 'node_teasers'){
+    return;
+  }
+
+  switch($form_id){
+    //Variant "General" settings page
+    case "panels_panel_context_edit_settings":
+      //Unset no_blocks and css options
+      unset($form['conf']['no_blocks'], $form['conf']['css_id'], $form['conf']['css']);
+      break;
+
+    //Content Editing Page
+    case "panels_panel_context_edit_content":
+
+      //Template Replace variable
+      $conf = $form_state['handler']->conf;
+      $form['template_replace'] = array(
+        '#type' => 'checkbox',
+        '#default_value' => $conf['template_replace'],
+        '#title' => t('Replace entire node template.'),
+        '#description' => t('Check this to replace node.tpl.php with this panel.  If unchecked, the Panel content will be inserted into the $content variable in node.tpl.php.  <em>If you check this, you will probably want to add the Node: Title to the panel.</em>'),
+        '#weight' => -1,
+      );
+
+      //Additional submit handler to save template_replace
+      $form['#submit'][] = 'panels_teasers_context_edit_content_submit';
+
+      //Remove Title fields
+      unset($form['display_title']);
+      break;
+
+    //Page Edit form...  This code sets breadcrumbs to Admin > Build > Teasers
+    case "page_manager_save_page_form":
+      $crumbs[] = l(t('Administer'), 'admin');
+      $crumbs[] = l(t('Site Building'), 'admin/build');
+      $crumbs[] = l(t('Teaser Panels'), 'admin/build/teasers');
+      drupal_set_breadcrumb($crumbs);
+      break;
+  }
+}
+
+/**
+ * Replacement submit handler for the panel_context task handler
+ */
+function panels_teasers_context_edit_content_submit(&$form, &$form_state) {
+  $form_state['handler']->conf['template_replace'] = $form_state['values']['template_replace'];
+}
+
+/**
+ * Replacement for panel_context.inc's panels_panel_context_render()
+ * Check selection rules and, if passed, render the contexts.
+ */
+function panels_teasers_render($handler, $base_contexts, $args, $test = TRUE) {
+  // Go through arguments and see if they match.
+  ctools_include('context');
+  ctools_include('context-task-handler');
+  // Add my contexts
+  $contexts = ctools_context_handler_get_handler_contexts($base_contexts, $handler);
+
+  // Test.
+  if ($test && !ctools_context_handler_select($handler, $contexts)) {
+    return;
+  }
+
+  if (isset($handler->handler)) {
+    ctools_context_handler_pre_render($handler, $contexts, $args);
+  }
+
+  // Load the display
+  $display = panels_panel_context_get_display($handler);
+
+  $display->context = $contexts;
+  $display->args = $args;
+  $display->template_replace = $handler->conf['template_replace'];
+
+  // With an argument, this actually sets the display.
+  panels_get_current_page_display($display);
+
+  $info = array(
+    'content' => panels_render_display($display),
+    'template_replace' => !empty($handler->conf['template_replace']),
+  );
+
+  $info['title'] = panels_display_get_title($display);
+
+  return $info;
+}
+
+/**
+ * Implementation of hook_ctools_plugin_dierctory() to let the system know
+ * we implement task and task_handler plugins.
+ */
+function panels_teasers_ctools_plugin_directory($module, $plugin) {
+  if ($module == 'page_manager') {
+    return 'plugins/' . $plugin;
+  }
+}

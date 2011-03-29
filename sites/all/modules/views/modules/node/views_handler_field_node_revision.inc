@@ -1,0 +1,63 @@
+<?php
+// $Id: views_handler_field_node_revision.inc,v 1.1.2.2 2011/01/10 23:14:26 merlinofchaos Exp $
+/**
+ * @file
+ * Contains the basic 'node_revision' field handler.
+ */
+
+class views_handler_field_node_revision extends views_handler_field_node {
+  function init(&$view, $options) {
+    parent::init($view, $options);
+    if (!empty($this->options['link_to_node_revision'])) {
+      $this->additional_fields['vid'] = 'vid';
+      $this->additional_fields['nid'] = 'nid';
+      if (module_exists('translation')) {
+        $this->additional_fields['language'] = array('table' => 'node', 'field' => 'language');
+      }
+    }
+  }
+  function option_definition() {
+    $options = parent::option_definition();
+    $options['link_to_node_revision'] = array('default' => FALSE);
+    return $options;
+  }
+
+  /**
+   * Provide link to revision option.
+   */
+  function options_form(&$form, &$form_state) {
+    parent::options_form($form, $form_state);
+    $form['link_to_node_revision'] = array(
+      '#title' => t('Link this field to its node revision'),
+      '#description' => t('This will override any other link you have set.'),
+      '#type' => 'checkbox',
+      '#default_value' => !empty($this->options['link_to_node_revision']),
+    );
+  }
+
+  /**
+   * Render whatever the data is as a link to the node.
+   *
+   * Data should be made XSS safe prior to calling this function.
+   */
+  function render_link($data, $values) {
+    if (!empty($this->options['link_to_node_revision']) && $data !== NULL && $data !== '') {
+      $this->options['alter']['make_link'] = TRUE;
+      $nid = $this->get_value($values, 'nid');
+      $vid = $this->get_value($values, 'vid');
+      $language = $this->get_value($values, 'language');
+      $this->options['alter']['path'] = "node/" . $nid . '/revisions/' . $vid . '/view';
+      if (isset($this->aliases['language'])) {
+        $languages = language_list();
+        if (isset($languages[$language])) {
+          $this->options['alter']['language'] = $languages[$language];
+        }
+      }
+    }
+    else {
+      return parent::render_link($data, $values);
+    }
+    return $data;
+  }
+}
+

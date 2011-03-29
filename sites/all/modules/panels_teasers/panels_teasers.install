@@ -1,0 +1,16 @@
+<?php
+// $Id: panels_teasers.install,v 1.1.2.3 2010/06/11 22:53:31 gundalo Exp $
+
+/**
+ * Update from Panels Teasers 1.0
+ *
+ * @TODO: Write script to pull existing Mini Panels set as teasers into variants
+ *   of the node_teasers Panel.
+ *
+ *  NOT YET IMPLEMENTED!  (Obviously.)
+ *
+function panels_teasers_update_6200(&$sandbox){
+  $ret = array();
+  return $ret;
+}
+*/

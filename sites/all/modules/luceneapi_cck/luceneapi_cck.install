@@ -1,0 +1,20 @@
+<?php
+// $Id: luceneapi_cck.install,v 1.2 2009/12/10 02:27:19 cpliakas Exp $
+
+/**
+ * @file
+ * Installation functions for the Search Lucene CCK module.
+ *
+ * @ingroup luceneapi_cck
+ */
+
+/**
+ * Implementation of hook_uninstall().
+ */
+function luceneapi_cck_uninstall() {
+  // removes all variables that start with "luceneapi_cck:"
+  $result = db_query("SELECT name FROM {variable} WHERE name LIKE 'luceneapi_cck:%%'");
+  while ($row = db_fetch_object($result)) {
+    variable_del($row->name);
+  }
+}

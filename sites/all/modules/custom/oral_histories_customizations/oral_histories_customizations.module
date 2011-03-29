@@ -1,0 +1,54 @@
+<?php
+
+/**
+* @file oral_histories_customizations.module
+* Customizations for oral histories site.
+*/
+
+
+/**
+* Implementation of hook_views_query_alter
+*/
+
+function oral_histories_customizations_views_query_alter($view, $query){
+  
+  // Branch based on view name...
+  switch ($view->name){
+  
+  // Institutions to histories.
+  case 'institutions_to_histories':
+    $query->groupby = array('node_node_data_field_institution_title');
+    break;
+  // Positions to histories.
+  case 'positions_to_histories':
+    $query->groupby = array('node_node_data_field_positions_title');
+    break;
+  default:
+    break;
+  }
+}
+
+function views_views_pre_execute(&$view) {
+
+  
+    // Branch based on view name...
+  switch ($view->name){
+  
+  // Institutions to histories.
+  case 'institutions_to_histories':
+    $view->build_info['query'] = preg_replace('/(GROUP BY) (.*)/',
+    '$1 node_node_data_field_institution_nid',
+      $view->build_info['query']);
+    break;
+  case 'positions_to_histories':
+    $view->build_info['query'] = preg_replace('/(GROUP BY) (.*)/',
+    '$1 node_node_data_field_positions_nid',
+      $view->build_info['query']);
+    break;
+  default:
+    break;
+  }
+  
+}
+  
+?>
