@@ -617,8 +617,9 @@ function date_prepare_node($node, $field, $type_name, $context, $options) {
     $format = date_type_format($field['type']);
     include_once(drupal_get_path('module', 'date_api') .'/date_api_sql.inc');
     $date_handler = new date_sql_handler($field);
-    $arg0 = !empty($options['multiple']['multiple_from']) ? $date_handler->arg_replace($options['multiple']['multiple_from']) : variable_get('date_min_year', 100) .'-01-01T00:00:00';
-    $arg1 = !empty($options['multiple']['multiple_to']) ? $date_handler->arg_replace($options['multiple']['multiple_to']) : variable_get('date_max_year', 4000) .'-12-31T23:59:59';
+    $arg0 = !empty($options['multiple']['multiple_from']) ? date_format(date_create($options['multiple']['multiple_from'], date_default_timezone()), DATE_FORMAT_DATETIME) : variable_get('date_min_year', 100) .'-01-01T00:00:00';
+    $arg1 = !empty($options['multiple']['multiple_to']) ? date_format(date_create($options['multiple']['multiple_to'], date_default_timezone()), DATE_FORMAT_DATETIME) : variable_get('date_max_year', 4000) .'-12-31T23:59:59';
+        
     if (!empty($arg0) && !empty($arg1)) {
       $arg = $arg0 .'--'. $arg1;
     }
